@@ -61,13 +61,12 @@ struct StartForm: View {
     }
 }
 
-/// A running session: task, countdown, state, Break, and End early behind a typed phrase and a 30 s countdown.
+/// A running session: task, countdown, state, Break, and End early behind a typed phrase and a 10 s countdown.
 struct RunningView: View {
     @Environment(AppModel.self) private var model
     let session: Session
     @State private var typing = false
     @State private var phrase = ""
-    @State private var deadline: Date?
 
     private static let confirmation = "I am ending this session early"
     var body: some View {
@@ -106,15 +105,12 @@ struct RunningView: View {
     }
 
     @ViewBuilder private var endFlow: some View {
-        if let deadline {
+        if let left = model.endingIn {
             HStack {
-                TimelineView(.periodic(from: .now, by: 1)) { context in
-                    Text("Ending in \(max(0, Int(deadline.timeIntervalSince(context.date).rounded(.up)))) s").monospacedDigit().foregroundStyle(.secondary)
-                }
+                Text("Ending in \(Int(left.rounded(.up))) s").monospacedDigit().foregroundStyle(.secondary)
                 Spacer()
-                Button("Keep going") { reset() }
+                Button("Keep going") { model.keepGoing(); reset() }
             }
-            .task { if (try? await Task.sleep(for: .seconds(30))) != nil { model.endEarly() } }
         } else if typing {
             VStack(alignment: .leading, spacing: Metrics.row) {
                 Text("Type “\(Self.confirmation)” to end it.").font(.callout).foregroundStyle(.secondary)
@@ -122,7 +118,7 @@ struct RunningView: View {
                 HStack {
                     Button("Cancel") { reset() }
                     Spacer()
-                    Button("End session") { deadline = Date.now.addingTimeInterval(30) }.disabled(phrase.trimmed != Self.confirmation)
+                    Button("End session") { model.confirmEnd() }.disabled(phrase.trimmed != Self.confirmation)
                 }
             }
         } else {
@@ -130,7 +126,7 @@ struct RunningView: View {
         }
     }
 
-    private func reset() { (typing, phrase, deadline) = (false, "", nil) }
+    private func reset() { (typing, phrase) = (false, "") }
 }
 
 /// The session's time is up: the one-line reflection, stored with the session.

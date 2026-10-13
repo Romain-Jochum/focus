@@ -18,7 +18,7 @@ Research backing every number below lives in `research/` (see `research/README.m
 - Dock icon and a Focus window (same content as the menu-bar popover), so it is always visible while open; closing the window keeps it running.
 - Menu bar item: state dot (green focused, amber drifting, red away/alarm, grey idle) plus remaining minutes. Popover shows task, big tabular countdown, state line, Break and End buttons.
 - Wrap-up notification 5 min before the end. At the end: the session's verdict and XP (see Progression) as a notification with its sound, then a one-line reflection prompt ("How did it go?"), stored with the session.
-- Ending early: type the exact phrase `I am ending this session early`, then a 30 s countdown; logged as `abandoned`.
+- Ending early: type the exact phrase `I am ending this session early`, then a 10 s countdown, kept by the engine so closing the popover does not cancel it (Keep going does); logged as `abandoned`.
 
 ### Detection rules (evaluated every second)
 
@@ -186,7 +186,7 @@ System font, semantic system colours, the system accent colour (`Color.accentCol
 
 ## Testing
 
-- `FocusTests`: table-driven scenario tests — a scripted timeline of ticks fed to `Engine` with expected actions at given seconds (e.g. "45 s on youtube.com/shorts → checkIn at t=20 → closeTab at t=50"), plus Rules, Store, Stats, Progression (verdicts, bonuses, streaks, levels, a pacing check) and Garden (determinism, one tile per step, the wave) tests. The suite (276 checks) runs in about 0.1 s; `make test` ≈ 2–4 s incremental.
+- `FocusTests`: table-driven scenario tests — a scripted timeline of ticks fed to `Engine` with expected actions at given seconds (e.g. "45 s on youtube.com/shorts → checkIn at t=20 → closeTab at t=50"), plus Rules, Store, Stats, Progression (verdicts, bonuses, streaks, levels, a pacing check) and Garden (determinism, one tile per step, the wave) tests. The suite (278 checks) runs in about 0.1 s; `make test` ≈ 2–4 s incremental.
 - `Focus --snapshots <dir>`: renders every view in light and dark to PNG for visual review without clicking (the Focus window included), plus the garden at several levels with its render times, the water's first steps (`garden-water-*.png`) and the step and level at which it reaches the edge, and frames of the reveal, withering and life (`stage-*.png`, drawn from the stage's Core Animation presentation tree in an offscreen window; masks are left out there).
 - `Focus --garden-demo [seconds]`: the Focus window with a reveal every 10 s (growing and withering in turn) and life running throughout, with no text field focused so the cursor's animation is not counted, then the app's CPU and its footprint before drawing, after and at the end. Nothing is saved.
 - `Focus --garden-preview` (`make garden`): the garden alone in the Focus window with a level slider and stepper. Letting go shows the start of that level as after a session: going up plays the reveal with the level-up card, going down the withering. No menu-bar item, settings or sessions are touched, and the pictures go to a temporary folder.

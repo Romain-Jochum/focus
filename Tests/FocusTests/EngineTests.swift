@@ -536,6 +536,19 @@ private func endEarlyAbandons() {
     _ = run(engine, 0...10) { tick($0) }
     check(engine.endEarly(date: workDate) == [.dismiss, .ended(.abandoned), .save], "ending early abandons")
     check(engine.record?.outcome == .abandoned, "abandoned outcome is kept until reflection")
+
+    let counted = Engine()
+    _ = counted.start(session(), now: 0)
+    _ = run(counted, 0...10) { tick($0) }
+    counted.confirmEnd(now: 10)
+    var log = run(counted, 11...20) { tick($0) }
+    check(occurrences(log, of: .ended(.abandoned)) == [20] && counted.endsAt == nil, "the phrase typed at 10 s ends the session at 20 s, on a tick")
+    let kept = Engine()
+    _ = kept.start(session(), now: 0)
+    kept.confirmEnd(now: 0)
+    kept.keepGoing()
+    log = run(kept, 0...30) { tick($0) }
+    check(occurrences(log, of: .ended(.abandoned)).isEmpty && kept.record?.outcome == .running, "keep going cancels the countdown")
 }
 
 private func resumeBooksGapAsUntracked() {

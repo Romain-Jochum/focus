@@ -34,6 +34,8 @@ struct SetupItem: Identifiable, Equatable {
     var remaining: Double = 0
     var breakAvailable = false
     var breakRemaining: Double?
+    /// Seconds until the session ends early, while that countdown runs.
+    var endingIn: Double?
     /// The running break is a quick pause.
     var pausing = false
     var pausesLeft = 0
@@ -146,7 +148,9 @@ struct SetupItem: Identifiable, Equatable {
     func pause() { perform(engine.pause(now: monotonic())); mirror() }
     /// "I'm back": ends the break or quick pause now.
     func endBreak() { perform(engine.endBreak(now: monotonic())); mirror() }
-    func endEarly() { perform(engine.endEarly(date: Date())); mirror() }
+    /// Starts the end-early countdown; the tick ends the session when it runs out.
+    func confirmEnd() { engine.confirmEnd(now: monotonic()); mirror() }
+    func keepGoing() { engine.keepGoing(); mirror() }
 
     /// Saves the reflection with the record, then closes it (the engine clears its copy).
     func reflect(_ text: String) {
@@ -369,6 +373,7 @@ struct SetupItem: Identifiable, Equatable {
         set(\.remaining, engine.remaining)
         set(\.breakAvailable, engine.breakAvailable)
         set(\.breakRemaining, engine.breakEndsAt.map { max($0 - now, 0) })
+        set(\.endingIn, engine.endsAt.map { max($0 - now, 0) })
         set(\.pausing, engine.pausing)
         set(\.pausesLeft, engine.pausesLeft)
         set(\.frontmost, activity.appName)

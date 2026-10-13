@@ -21,6 +21,8 @@ public final class Engine {
     static let closeAfter = 30.0
     /// An unanswered check-in turns into a looping alarm after this long.
     static let alarmAfter = 30.0
+    /// Ending early: the wait after the phrase is typed.
+    static let endCountdown = 10.0
     static let permissionsRepeat = 60.0
     static let phoneIdle = 10.0
     /// The iPhone must report active use this long before it counts.
@@ -58,6 +60,9 @@ public final class Engine {
     public private(set) var breakEndsAt: Double?
     /// The running break is a quick pause.
     public private(set) var pausing = false
+    /// Monotonic time the session ends early (the phrase was typed), nil when no countdown runs. Kept here, not in the popover, so
+    /// closing the popover does not cancel it.
+    public private(set) var endsAt: Double?
     /// Whether the camera should stream: in a running session, unless on a break or asleep, once input has stopped for `cameraIdle` s,
     /// until it has lasted `cameraHold` s, and always while a card or quick pause is up or the lens reads covered.
     public private(set) var wantsCamera = false
@@ -136,6 +141,7 @@ public final class Engine {
     }
 
     public func step(_ tick: Tick) -> [Action] {
+        if let endsAt, tick.now >= endsAt { return endEarly(date: tick.date) }
         var out = evaluate(tick)
         inputSince = tick.idle < Self.cameraIdle ? inputSince ?? tick.now : nil
         let typing = inputSince.map { tick.now - $0 >= Self.cameraHold } ?? false
@@ -370,6 +376,10 @@ public final class Engine {
         return [.save]
     }
 
+    /// The phrase was typed: the session ends `endCountdown` s from now unless `keepGoing()`.
+    public func confirmEnd(now: Double) { if record?.outcome == .running { endsAt = now + Self.endCountdown } }
+    public func keepGoing() { endsAt = nil }
+
     public func endEarly(date: Date) -> [Action] {
         guard record?.outcome == .running else { return [] }
         record?.lastSeen = date
@@ -423,6 +433,7 @@ public final class Engine {
         let silence: [Action] = alarming ? [.alarm(false)] : []
         alarming = false
         record?.outcome = outcome
+        endsAt = nil
         overlay = nil
         category = nil
         breakAvailable = false

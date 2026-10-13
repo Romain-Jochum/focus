@@ -97,7 +97,7 @@ For YouTube, also turn on "Allow JavaScript from Apple Events" once in Safari's 
 - **Breaks:** one 5-minute break is earned per 50 focused minutes. **Quick pause** is for a short trip away (up to 5 minutes, once per session, twice from 90 minutes) and keeps the earned break; it ends by itself when the camera sees you back after at least 20 s away. **I'm back** ends either early.
 - **The garden:** the Focus window shows it on the right, with the level, XP, streak and today's multiplier. After a session the new growth spreads in with a card showing the result, and butterflies and birds move over the island for 20 seconds when you open the window.
 - **Finishing:** a completed session posts a notification with its result and a sound.
-- **Ending early:** type `I am ending this session early`, then wait 30 s. While a session runs, Quit is refused.
+- **Ending early:** type `I am ending this session early`, then wait 10 s (the popover can be closed). While a session runs, Quit is refused.
 - **Stats:** today and the last 7 days per category, a timeline per session, top distractions, and every answer.
 - **Settings:** working hours, distracting domains and apps, your iPhone, and developer mode.
 - **Developer mode** (Settings › Developer, off by default): each check-in you mark as a false alarm is saved with the images it showed (the camera frame, and the screen for site, app, idle and offline cards) and the sensor log of the 3 minutes before it, so you can work on detection with real misses. **Show saved** opens the folder.
