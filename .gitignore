@@ -1,0 +1,20 @@
+# Build output (make clean)
+.build/
+.scratch/
+*.app
+
+# Phone detector, exported by scripts/make-model.sh (52 MB)
+*.mlpackage
+*.mlmodelc
+
+# Local spike artifacts (research/ keeps the write-ups)
+research/models/
+
+# macOS and editors
+.DS_Store
+.swiftpm/
+.vscode/
+.idea/
+
+# Local agent worktrees
+.claude/

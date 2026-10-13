@@ -1,0 +1,16 @@
+# Focus
+
+> Focus is a macOS 26 focus app written in Swift with SwiftPM. It watches the frontmost app and the current browser tab, uses the built-in camera (Vision face and head pose, and an RF-DETR phone detector in Core ML) and the iPhone's Bluetooth advertisement to detect drift, asks for typed check-ins, categorises every second, and rewards focused sessions with XP, 100 levels and a SceneKit-rendered garden. Everything runs on-device.
+
+## Docs
+
+- [README](README.md): install, use and build.
+- [Design](docs/design.md): behaviour, every threshold, architecture and the session budget.
+- [Research](research/README.md): the research notes behind the design.
+- [Contributing](CONTRIBUTING.md): how to propose and submit changes.
+
+## Code
+
+- [Sources/FocusCore](Sources/FocusCore): the pure engine, rules, progression and garden.
+- [Sources/Focus](Sources/Focus): the app, sensors, UI and garden renderer.
+- [Tests/FocusTests](Tests/FocusTests): the executable test runner.
