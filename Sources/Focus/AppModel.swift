@@ -2,7 +2,9 @@ import AppKit
 import CoreGraphics
 import AVFoundation
 import FocusCore
+import ImageIO
 import Observation
+import UniformTypeIdentifiers
 import UserNotifications
 
 struct SetupItem: Identifiable, Equatable {
@@ -62,7 +64,6 @@ struct SetupItem: Identifiable, Equatable {
     @ObservationIgnored private let cam = CameraSensor()
     @ObservationIgnored private let phone = PhoneSensor()
     @ObservationIgnored private var cameraOn = false
-    @ObservationIgnored private var cameraSince = 0.0
     /// Counts overlay changes, so a screen capture that finishes after its card is gone is dropped.
     @ObservationIgnored private var shown = 0
     /// Accessibility and Automation granted; the camera is not part of it (its loss is Away, not untracked).
@@ -71,6 +72,9 @@ struct SetupItem: Identifiable, Equatable {
     @ObservationIgnored private var summaries: [SessionSummary] = []
     /// The day `game` was folded for; a new day can end a streak.
     @ObservationIgnored private var gameDay = Date.distantPast
+    /// Developer mode: the session's recent ticks, for a `FalseAlarm`, and when the card now up was raised.
+    @ObservationIgnored private var recent = TickLog()
+    @ObservationIgnored private var shownAt: Double?
 
     /// Load settings, resume any running session, start sensors and the tick.
     func launch() {
@@ -96,9 +100,11 @@ struct SetupItem: Identifiable, Equatable {
         refreshSetup()
         if let running = store.active() {
             perform(engine.resume(running, now: monotonic(), date: Date()))
-            if engine.record?.outcome == .running { startCamera() }
+            if engine.record?.outcome == .running { startSensors() }
         }
-        RunLoop.main.add(Timer(timeInterval: 1, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.tick() } }, forMode: .common)
+        let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.tick() } }
+        timer.tolerance = 0.1   // lets macOS batch the wakeup with others; every rule counts in seconds of monotonic time
+        RunLoop.main.add(timer, forMode: .common)
         if let launch = Self.launchStart, engine.record == nil {
             start(task: launch.task, plan: "", mode: .computer, minutes: launch.minutes)
         }
@@ -107,7 +113,7 @@ struct SetupItem: Identifiable, Equatable {
 
     func start(task: String, plan: String, mode: Mode, minutes: Int) {
         perform(engine.start(Session(task: task, plan: plan, mode: mode, minutes: minutes, started: Date()), now: monotonic()))
-        startCamera()
+        startSensors()
         tick()  // Dismisses a no-session card and mirrors the new state.
     }
 
@@ -119,9 +125,21 @@ struct SetupItem: Identifiable, Equatable {
             store.append(Entry(at: date, reason: "noSession", answer: answer.rawValue, text: text))
             journal = store.journal(since: weekAgo)
         }
+        let card = overlay, shot = evidence, snap = screen, iPhone = iPhoneInUse, ticks = recent.ticks, alarms = engine.record?.falseAlarms
         perform(engine.answer(answer, text: text, now: monotonic(), date: date))
+        if settings.developerMode == true, let card, let session = engine.record?.session, engine.record?.falseAlarms != alarms {
+            keep(FalseAlarm(at: date, reason: String(describing: card), text: text, task: session.task, mode: session.mode,
+                        face: shot?.face.map(Self.box), phone: shot?.phone.map(Self.box), phoneScore: shot?.phoneScore,
+                        iPhoneInUse: iPhone, ticks: ticks, settings: settings), camera: shot?.frame, screen: snap)
+        }
         mirror()
         return true
+    }
+
+    /// Developer mode: the folder of saved false alarms, in Finder.
+    func revealFalseAlarms() {
+        try? FileManager.default.createDirectory(at: store.falseAlarmsURL, withIntermediateDirectories: true)
+        NSWorkspace.shared.open(store.falseAlarmsURL)
     }
 
     func takeBreak() { perform(engine.takeBreak(now: monotonic())); mirror() }
@@ -199,15 +217,19 @@ struct SetupItem: Identifiable, Equatable {
         if Calendar.current.startOfDay(for: Date()) != gameDay { refreshGame() }
         // Every 2 s while something is missing, so a switch flipped in System Settings shows at once.
         if now - setupAt >= (setup.allSatisfy(\.ok) ? 60 : 2) { refreshSetup() }
-        var reading = cameraOn ? cam.latest : nil
-        // No frame for 15 s (camera taken by another app, or the session failed to start): treat as covered, so Away fires.
-        if cameraOn, now - max(reading?.at ?? 0, cameraSince) > 15 { reading = CameraReading(at: now, presence: .blocked) }
+        let reading = cameraOn ? cam.latest : nil
         let idle = ActivitySensor.idleSeconds()
-        if cameraOn { phone.update(idle: idle) }
-        perform(engine.step(Tick(now: now, date: Date(), app: activity.app, appName: activity.appName, title: activity.title,
-                                 url: activity.url, idle: idle, camera: reading,
-                                 asleep: activity.asleep, permissionsOK: trackingOK, phoneInUse: cameraOn && phone.inUse,
-                                 micInUse: Microphone.inUse())))
+        // The iPhone matters only to the phone rule, which waits on a break or pause and while the screen is locked.
+        if cameraOn { phone.update(idle: activity.asleep || engine.breakEndsAt != nil ? 0 : idle) }
+        // The microphone matters only in a session (the engine reads it nowhere else).
+        let t = Tick(now: now, date: Date(), app: activity.app, appName: activity.appName, title: activity.title, url: activity.url,
+                     idle: idle, camera: reading, asleep: activity.asleep, permissionsOK: trackingOK, phoneInUse: cameraOn && phone.inUse,
+                     micInUse: cameraOn && Microphone.inUse())
+        if settings.developerMode == true, engine.record?.outcome == .running { recent.add(t, shownAt: shownAt) } else { recent.clear() }
+        perform(engine.step(t))
+        cam.want(engine.wantsCamera)
+        // A card raised while the camera rested gets its frame once the stream has one.
+        if evidence == nil, let shot = cameraEvidence(overlay) { evidence = shot }
         set(\.camera, reading)
         mirror(now)
     }
@@ -216,13 +238,13 @@ struct SetupItem: Identifiable, Equatable {
         for action in actions {
             switch action {
             case .show(let reason):
-                overlay = reason; shown += 1
-                evidence = switch reason { case .noSession, .permissions: nil; default: cam.evidence(preferPhone: reason == .phone) }
+                overlay = reason; shown += 1; shownAt = monotonic()
+                evidence = cameraEvidence(reason)
                 screen = nil
                 iPhoneInUse = reason == .phone && phone.inUse
                 if reason.needsScreen { captureScreen(for: shown) }
                 OverlayController.shared.show()
-            case .dismiss: overlay = nil; evidence = nil; screen = nil; shown += 1; OverlayController.shared.hide()
+            case .dismiss: overlay = nil; evidence = nil; screen = nil; shown += 1; shownAt = nil; OverlayController.shared.hide()
             case .chime: NSSound(named: "Glass")?.play()
             case .alarm(let on): if on { Alarm.start() } else { Alarm.stop() }
             case .sound(let cue): Sounds.play(cue)
@@ -232,7 +254,7 @@ struct SetupItem: Identifiable, Equatable {
             case .notify(let text): notify("Focus", text)
             case .save: if let record = engine.record { store.save(record) }
             case .ended:
-                cameraOn = false; cam.stop(); phone.stop()
+                cameraOn = false; activity.readsURL = false; cam.stop(); phone.stop()
                 if let record = engine.record { store.save(record); score(record) }
                 reload()
             }
@@ -300,7 +322,37 @@ struct SetupItem: Identifiable, Equatable {
         UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
     }
 
-    private func startCamera() { cameraOn = true; cameraSince = monotonic(); cam.start(); phone.start() }
+    /// The sensors that run only during a session.
+    private func startSensors() { cameraOn = true; activity.readsURL = true; cam.start(); phone.start() }
+
+    /// The camera frame a card shows: none for the no-session and permissions cards.
+    private func cameraEvidence(_ reason: Reason?) -> CameraEvidence? {
+        switch reason {
+        case nil, .noSession?, .permissions?: nil
+        case let reason?: cam.evidence(preferPhone: reason == .phone, raw: settings.developerMode == true)
+        }
+    }
+
+    /// A card's box as the camera saw it (unmirrored), as [x, y, width, height].
+    private static func box(_ r: CGRect) -> [Double] {
+        let r = CameraEvidence.mirrored(r)
+        return [r.minX, r.minY, r.width, r.height].map(Double.init)
+    }
+
+    /// Writes a `FalseAlarm` and its images as JPEG, off the main thread: about 100–300 KB per false alarm.
+    private func keep(_ alarm: FalseAlarm, camera: CGImage?, screen: CGImage?) {
+        let store = store
+        DispatchQueue.global(qos: .utility).async {
+            let jpeg = { (image: CGImage?) -> Data? in
+                guard let image else { return nil }
+                let data = NSMutableData()
+                guard let out = CGImageDestinationCreateWithData(data, UTType.jpeg.identifier as CFString, 1, nil) else { return nil }
+                CGImageDestinationAddImage(out, image, [kCGImageDestinationLossyCompressionQuality: 0.8] as CFDictionary)
+                return CGImageDestinationFinalize(out) ? data as Data : nil
+            }
+            store.save(alarm, files: ["camera.jpg": jpeg(camera), "screen.jpg": jpeg(screen)].compactMapValues { $0 })
+        }
+    }
 
     /// Fills in the screen image once captured; excludes Focus's own windows, so the overlay is never in it.
     private func captureScreen(for id: Int) {

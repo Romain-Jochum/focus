@@ -40,6 +40,11 @@ public final class Engine {
     /// Sessions this long get a second quick pause.
     static let secondPauseFrom = 90
     static let saveEvery = 30.0
+    /// The face and phone rules need input to stop first, so the camera streams only after this long without input, and stops after
+    /// `cameraHold` s of input (see `wantsCamera`). A lens covered while it rests is seen at the next such gap, so Away still comes
+    /// 30 s after the last input.
+    static let cameraIdle = 5.0
+    static let cameraHold = 30.0
     static let wrapUpAt = 300.0
 
     public var settings: Settings
@@ -53,6 +58,9 @@ public final class Engine {
     public private(set) var breakEndsAt: Double?
     /// The running break is a quick pause.
     public private(set) var pausing = false
+    /// Whether the camera should stream: in a running session, unless on a break or asleep, once input has stopped for `cameraIdle` s,
+    /// until it has lasted `cameraHold` s, and always while a card or quick pause is up or the lens reads covered.
+    public private(set) var wantsCamera = false
 
     private var lastNow: Double?
     private var lastFaceAt = -Double.infinity
@@ -89,6 +97,8 @@ public final class Engine {
     private var phoneHits = 0
     private var phoneInUseSince: Double?
     private var lastSample = -Double.infinity
+    /// Since when input has had gaps shorter than `cameraIdle`.
+    private var inputSince: Double?
     /// Monotonic time of each recent tick with keyboard or mouse input, for the offline rule.
     private var activity: [Double] = []
     private var lastCSSURL: String?
@@ -127,6 +137,10 @@ public final class Engine {
 
     public func step(_ tick: Tick) -> [Action] {
         var out = evaluate(tick)
+        inputSince = tick.idle < Self.cameraIdle ? inputSince ?? tick.now : nil
+        let typing = inputSince.map { tick.now - $0 >= Self.cameraHold } ?? false
+        wantsCamera = record?.outcome == .running && !tick.asleep && (breakEndsAt == nil || pausing)
+            && (!typing || overlay != nil || pausing || tick.camera?.presence == .blocked)
         // Not the permissions card: it steps aside while System Settings is open.
         let alarm = overlay != nil && overlay != .permissions && tick.now - shownAt >= Self.alarmAfter
         if alarm != alarming {
@@ -143,8 +157,8 @@ public final class Engine {
         tickStart = tick.date.addingTimeInterval(-dt)
         var out: [Action] = []
         let cameraLost = tick.camera.map { [Presence.none, .blocked, .unauthorized].contains($0.presence) } ?? false
-        // Keyboard or mouse input counts as presence when the camera sees no face (talking, or prompting while recording).
-        if tick.camera?.presence == .face || (tick.camera?.presence == Presence.none && tick.idle < Self.activeIdle) { lastFaceAt = tick.now }
+        // Keyboard or mouse input counts as presence when the camera sees no face (talking, or prompting while recording) or is off.
+        if tick.camera?.presence == .face || ((tick.camera.map { $0.presence == .none } ?? true) && tick.idle < Self.activeIdle) { lastFaceAt = tick.now }
         if let end = breakEndsAt {
             if pausing {
                 pauseEmptySince = cameraLost ? pauseEmptySince ?? tick.now : nil
@@ -383,6 +397,7 @@ public final class Engine {
         wrapUpSent = false
         phoneHits = 0
         phoneInUseSince = nil
+        inputSince = nil
         driftTarget = nil
         driftSince = nil
         justified = [:]

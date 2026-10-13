@@ -18,7 +18,7 @@ A macOS focus app that catches drift within seconds, checks you in, and grows a 
 
 Focus keeps you on the task you declared. During a session it watches the frontmost app and browser tab, the built-in camera (are you there, is your head down, is a phone in frame) and your iPhone's own Bluetooth signal (is it unlocked and in use). When you drift, it covers the screen with a check-in that needs a typed answer, then sounds an alarm if you ignore it. Every second of a session is counted as focused, drifting, away, phone, break or untracked, so focus time is measurable.
 
-Everything runs on the Mac: no account, no network at run time, and camera frames and screenshots never touch the disk.
+Everything runs on the Mac: no account, no network at run time, and camera frames and screenshots never touch the disk unless you turn on developer mode.
 
 ## How it works
 
@@ -87,7 +87,7 @@ For YouTube, also turn on "Allow JavaScript from Apple Events" once in Safari's 
 - **Check-ins:**
   - **Distraction:** a distracting site or app for 20 s.
   - **Phone:** a phone in the camera's view, or your iPhone reporting use for 15 s, with no keyboard or mouse input for 10 s; or, On computer, your head down for 45 s with no input (a microphone in use counts as input).
-  - **Away:** no face and no keyboard or mouse input for 30 s, or 2 minutes while an app is using the microphone; a covered camera for 30 s.
+  - **Away:** no face and no keyboard or mouse input for 30 s, or 2 minutes while an app is using the microphone; a covered camera for 30 s (counted from your last input if you cover it while typing, since the camera rests then).
   - **Idle:** On computer, your face in view and no input for 3 minutes (a microphone in use counts as input).
   - **Offline mode:** using the computer during an Offline session.
   - **No session:** working hours without a session running.
@@ -99,13 +99,16 @@ For YouTube, also turn on "Allow JavaScript from Apple Events" once in Safari's 
 - **Finishing:** a completed session posts a notification with its result and a sound.
 - **Ending early:** type `I am ending this session early`, then wait 30 s. While a session runs, Quit is refused.
 - **Stats:** today and the last 7 days per category, a timeline per session, top distractions, and every answer.
-- **Settings:** working hours, distracting domains and apps, and your iPhone.
+- **Settings:** working hours, distracting domains and apps, your iPhone, and developer mode.
+- **Developer mode** (Settings › Developer, off by default): each check-in you mark as a false alarm is saved with the images it showed (the camera frame, and the screen for site, app, idle and offline cards) and the sensor log of the 3 minutes before it, so you can work on detection with real misses. **Show saved** opens the folder.
 
 ## Privacy
 
 - **Stays on the Mac:** nothing leaves it.
-- **Stored on disk:** `~/Library/Application Support/Focus`, which holds `settings.json`, `sessions/*.json`, `journal.jsonl`, the compiled model, and the garden picture (`garden.png`, `garden.json`).
-- **Kept in memory only:** camera frames and the screen thumbnail, and only while a check-in is shown.
+- **Stored on disk:** `~/Library/Application Support/Focus`, which holds `settings.json`, `sessions/*.json`, `journal.jsonl`, the compiled model, the garden picture (`garden.png`, `garden.json`) and, in developer mode only, `false-alarms/`.
+- **Kept in memory only** (outside developer mode): camera frames (the latest one, and the last one with a phone in it, for the check-in card; dropped when the session ends) and the screen thumbnail (only while a check-in is shown).
+- **Developer mode:** off by default. When on, each check-in you mark as a false alarm is written to `false-alarms/<date>-<time>-<reason>/`: `camera.jpg` (the camera frame), `screen.jpg` (the screen thumbnail, for site, app, idle and offline cards) and `alarm.json` (your answer and the sensor log of the 3 minutes before, including app names, window titles and URLs). Nothing is sent anywhere or deleted automatically.
+- **The camera:** it runs only during a session, and rests (its light goes off) after 30 s of steady typing unless a check-in is up, on a break (not a quick pause) and while the screen is locked.
 - **The iPhone:** Focus reads the advert your iPhone already broadcasts. Nothing is paired, and nothing is installed on the phone.
 - **The microphone:** Focus only asks macOS whether some app is using it. No audio is read, and no permission is needed.
 
@@ -119,7 +122,7 @@ make garden      # the garden alone with a level slider: each level as it appear
 make clean       # remove build output (the exported model is kept)
 ```
 
-The budget during a session is at most 3% CPU and under 200 MB. A real 3-minute session of the installed app averaged 2.86% CPU and 190 MB (details in [docs/design.md](docs/design.md#camera-cadence-and-budget)).
+The budget during a session is at most 3% CPU and under 200 MB. `make probe` keeps the camera streaming throughout, the worst case, and reads 1.2–1.7% CPU and 19–36 MB; in a session the camera also rests while you type (details in [docs/design.md](docs/design.md#camera-cadence-and-budget)).
 
 | Path | Contents |
 |---|---|

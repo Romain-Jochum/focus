@@ -1,7 +1,7 @@
 import FocusCore
 import SwiftUI
 
-/// Work days and hours, distraction domains and app bundle identifiers. Save writes them to disk.
+/// Work days and hours, distraction domains, app bundle identifiers, the iPhone and developer mode. Save writes them to disk.
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @State private var draft = Settings()
@@ -29,12 +29,25 @@ struct SettingsView: View {
                         .disabled(model.findingPhone || !PhoneSensor.authorized)
                 }
             } header: { Text("iPhone") } footer: { Text("Unlock it and hold it next to the Mac. Only this iPhone counts as phone use.") }
+            Section {
+                HStack {
+                    // Applies at once, without Save, like a switch.
+                    Toggle("Developer mode", isOn: Binding(get: { draft.developerMode == true }, set: { on in
+                        (draft.developerMode, model.settings.developerMode) = (on, on)
+                        model.saveSettings()
+                    }))
+                    Spacer()
+                    Button("Show saved") { model.revealFalseAlarms() }
+                }
+            } header: { Text("Developer") } footer: {
+                Text("Keeps each check-in you mark as a false alarm, with its camera frame, screen and sensor log, to improve detection with later. On this Mac only.")
+            }
         }
         .formStyle(.grouped)
         .safeAreaInset(edge: .bottom) {
             HStack { Spacer(); Button("Save") { save() }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction) }.padding(Metrics.card)
         }
-        .frame(width: 460, height: 780)
+        .frame(width: 460, height: 870)
         .onAppear { draft = model.settings; (domains, apps) = (model.settings.domains.joined(separator: "\n"), model.settings.apps.joined(separator: "\n")) }
     }
 

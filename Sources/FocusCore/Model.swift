@@ -27,6 +27,8 @@ public struct Settings: Codable, Sendable, Equatable {
     public var iPhoneName: String?
     /// When the garden first appeared; XP is folded from the sessions since. Nil until then.
     public var gardenStart: Date?
+    /// Developer mode: each check-in answered as a false alarm is kept on disk as a `FalseAlarm`, to tune detection with later. Nil is off.
+    public var developerMode: Bool?
 
     public init() {}
 
@@ -70,6 +72,45 @@ public struct Entry: Codable, Sendable, Equatable {
     public init(at: Date, reason: String, answer: String, text: String) {
         self.at = at; self.reason = reason; self.answer = answer; self.text = text
     }
+}
+
+/// Developer mode: a check-in answered as a false alarm, with what the sensors read before it and while it was up. Its images (the
+/// camera frame and the screen the card showed) are saved next to it.
+public struct FalseAlarm: Codable, Sendable, Equatable {
+    public var at: Date
+    /// `Entry.reason`'s key, e.g. "phone", "away" or `distraction("youtube.com")`.
+    public var reason: String
+    /// The typed answer.
+    public var text: String
+    public var task: String
+    public var mode: Mode
+    /// The card's camera frame: face and phone boxes as [x, y, width, height] (normalized, top-left origin, as the camera sees it, not
+    /// mirrored) and the phone model's score on it; and whether the iPhone reported use.
+    public var face: [Double]?, phone: [Double]?, phoneScore: Double?
+    public var iPhoneInUse: Bool
+    /// One per second, oldest first: the minutes before the card and the time it was up. With `settings`, enough to replay the engine.
+    public var ticks: [Tick]
+    public var settings: Settings
+    public init(at: Date, reason: String, text: String, task: String, mode: Mode, face: [Double]?, phone: [Double]?, phoneScore: Double?,
+                iPhoneInUse: Bool, ticks: [Tick], settings: Settings) {
+        self.at = at; self.reason = reason; self.text = text; self.task = task; self.mode = mode
+        self.face = face; self.phone = phone; self.phoneScore = phoneScore; self.iPhoneInUse = iPhoneInUse; self.ticks = ticks
+        self.settings = settings
+    }
+}
+
+/// Developer mode: the ticks a `FalseAlarm` keeps, the last 3 minutes and, while a card is up, everything since 3 minutes before it.
+public struct TickLog: Sendable {
+    public static let lead = 180.0
+    public private(set) var ticks: [Tick] = []
+    public init() {}
+    /// `shownAt`: when the card now up was raised, nil when none is.
+    public mutating func add(_ tick: Tick, shownAt: Double?) {
+        ticks.append(tick)
+        let from = min(shownAt ?? tick.now, tick.now) - Self.lead
+        if let first = ticks.first, first.now < from { ticks.removeAll { $0.now < from } }
+    }
+    public mutating func clear() { if !ticks.isEmpty { ticks = [] } }
 }
 
 /// The persisted ledger of one session.
@@ -138,9 +179,9 @@ public struct SessionRecord: Codable, Sendable, Equatable {
 }
 
 /// What the camera saw in its latest sample.
-public enum Presence: String, Sendable, Equatable { case face, none, blocked, unauthorized }
+public enum Presence: String, Codable, Sendable, Equatable { case face, none, blocked, unauthorized }
 
-public struct CameraReading: Sendable, Equatable {
+public struct CameraReading: Codable, Sendable, Equatable {
     /// Monotonic time of the sample (same clock as `Tick.now`).
     public var at: Double
     public var presence: Presence
@@ -154,7 +195,7 @@ public struct CameraReading: Sendable, Equatable {
 }
 
 /// One snapshot of the world, assembled by the app once per second.
-public struct Tick: Sendable, Equatable {
+public struct Tick: Codable, Sendable, Equatable {
     /// Monotonic seconds; immune to wall-clock changes.
     public var now: Double
     public var date: Date

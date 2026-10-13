@@ -8,6 +8,8 @@ import ApplicationServices
     private(set) var title: String?
     private(set) var url: String?
     private(set) var asleep = false
+    /// Browser URLs are read only while this is set (during a session): each read is an Apple Event the browser has to answer.
+    var readsURL = false { didSet { if readsURL != oldValue { url = currentURL() } } }
 
     private var tokens: [(NotificationCenter, NSObjectProtocol)] = []
     private var observer: AXObserver?
@@ -69,7 +71,7 @@ import ApplicationServices
         title = next
         url = currentURL()
         // Right after activation the browser may not have its window front yet; read again shortly.
-        if newApp, url == nil, let bundle = app, Browser.bundles.contains(bundle) {
+        if newApp, readsURL, url == nil, let bundle = app, Browser.bundles.contains(bundle) {
             Task { @MainActor [weak self] in
                 try? await Task.sleep(for: .milliseconds(500))
                 guard let self, self.app == bundle, self.url == nil else { return }
@@ -79,7 +81,8 @@ import ApplicationServices
     }
 
     private func currentURL() -> String? {
-        app.flatMap { Browser.bundles.contains($0) ? activeURL($0) : nil }
+        guard readsURL, let app, Browser.bundles.contains(app) else { return nil }
+        return activeURL(app)
     }
 
     /// Attaches an AXObserver for the app's focus and title notifications, replacing any previous one.

@@ -14,7 +14,9 @@ import Foundation
         let activity = ActivitySensor()
         let phone = PhoneSensor()
         camera.start()
+        camera.want(true)   // always on: the budget is checked with the camera streaming
         if Bundle.main.bundleIdentifier != nil { phone.start() }  // Bluetooth needs the app bundle's Info.plist usage string, so it is skipped under swift run.
+        activity.readsURL = true
         activity.start()
         let bluetooth = PhoneSensor.authorized ? "allowed" : PhoneSensor.undetermined ? "not asked" : "denied"
         print(String(format: "probe: interval=%.1fs window=%.0fs bluetooth=%@ (budget: CPU <= 3%%, footprint < 200 MB)", interval, seconds, bluetooth))

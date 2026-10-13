@@ -21,8 +21,8 @@ private func session(_ minutes: Int = 25, mode: Mode = .computer) -> Session {
 
 private func tick(_ t: Int, app: String? = nil, url: String? = nil, idle: Double = 0, presence: Presence = .face,
                   pitch: Double = 0, phone: Double = 0, asleep: Bool = false, permissions: Bool = true,
-                  iPhone: Bool = false, date: Date? = nil, mic: Bool = false) -> Tick {
-    let camera = CameraReading(at: Double(t), presence: presence, pitchDown: pitch, phone: phone)
+                  iPhone: Bool = false, date: Date? = nil, mic: Bool = false, cameraOff: Bool = false) -> Tick {
+    let camera = cameraOff ? nil : CameraReading(at: Double(t), presence: presence, pitchDown: pitch, phone: phone)
     return Tick(now: Double(t), date: date ?? workDate.addingTimeInterval(Double(t)), app: app, appName: app, url: url, idle: idle,
                 camera: camera, asleep: asleep, permissionsOK: permissions, phoneInUse: iPhone, micInUse: mic)
 }
@@ -46,7 +46,9 @@ func engineTests() {
     justifiedTargetIsAllowedForTenMinutes()
     awayAlarmStopsWhenBackAndWaitsForAnswer()
     typingMeansPresent()
+    cameraStreamsOnlyWhenItMatters()
     awayFalseAlarmCostsNothing()
+    falseAlarmKeepsItsLeadUp()
     distractionFalseAlarmRebooksTime()
     answeredTimeIsNotFlaggedAgain()
     newTargetIsFlaggedOnItsOwn()
@@ -134,6 +136,56 @@ private func typingMeansPresent() {
     check(occurrences(blocked, of: .show(.away)) == [30], "a covered camera is away at 30 s, input or not")
 }
 
+/// Runs the engine with a camera that reads only while the engine wanted it the second before, as the app does; returns the
+/// seconds it was wanted after.
+private func gated(_ engine: Engine, _ range: ClosedRange<Int>, _ log: inout Log, _ make: (Int, Bool) -> Tick) -> [Int] {
+    range.filter { t in
+        let actions = engine.step(make(t, !engine.wantsCamera))
+        if !actions.isEmpty { log.append((t: t, actions: actions)) }
+        return engine.wantsCamera
+    }
+}
+
+private func cameraStreamsOnlyWhenItMatters() {
+    // Typing from the start with no face in view, then gone at 100 s.
+    let engine = Engine()
+    _ = engine.start(session(), now: 0)
+    var log: Log = []
+    let on = gated(engine, 0...200, &log) { t, off in tick(t, idle: t < 100 ? 0 : Double(t - 100), presence: .none, cameraOff: off) }
+    check(on == Array(0...29) + Array(105...200), "the camera checks for 30 s, rests while typing, and is back 5 s after the input stops")
+    let always = Engine()
+    _ = always.start(session(), now: 0)
+    let reference = run(always, 0...200) { t in tick(t, idle: t < 100 ? 0 : Double(t - 100), presence: .none) }
+    check(occurrences(log, of: .show(.away)) == [131] && occurrences(reference, of: .show(.away)) == [131],
+          "away fires at the same second as with the camera always on")
+
+    let covered = Engine()
+    _ = covered.start(session(), now: 0)
+    log = []
+    let blocked = gated(covered, 0...40, &log) { t, off in tick(t, idle: 0, presence: .blocked, cameraOff: off) }
+    check(blocked.count == 41 && occurrences(log, of: .show(.away)) == [30], "a covered lens keeps the camera on: away at 30 s, input or not")
+    let shut = Engine()
+    _ = shut.start(session(), now: 0)
+    log = []
+    _ = gated(shut, 0...200, &log) { t, off in tick(t, idle: t < 150 ? 0 : Double(t - 150), presence: t < 40 ? .face : .blocked, cameraOff: off) }
+    check(occurrences(log, of: .show(.away)) == [181], "a lens covered while the camera rests is seen once input stops: away 30 s after the last input")
+
+    let card = Engine()
+    _ = card.start(session(), now: 0)
+    log = []
+    let carded = gated(card, 0...60, &log) { t, off in tick(t, app: safari, url: youtube, cameraOff: off) }
+    check(occurrences(log, of: distraction) == [20] && carded.count == 61, "the camera stays on while a card is up")
+    _ = card.answer(.drifted, text: "back to the spec now", now: 61, date: workDate.addingTimeInterval(61))
+    _ = card.step(tick(62))
+    check(!card.wantsCamera, "and rests again once it is answered while typing")
+
+    _ = card.step(tick(63, idle: 999, asleep: true))
+    check(!card.wantsCamera, "off while the screen is locked")
+    check(card.pause(now: 64) == [.save], "a quick pause starts")
+    _ = card.step(tick(64))
+    check(card.wantsCamera, "on through a quick pause, input or not: its end waits for the face")
+}
+
 private func awayFalseAlarmCostsNothing() {
     let engine = Engine()
     _ = engine.start(session(), now: 0)
@@ -149,6 +201,25 @@ private func awayFalseAlarmCostsNothing() {
     let quietLog = run(engine, 82...142) { tick($0, idle: 999, presence: .none) }
     check(occurrences(quietLog, of: .show(.away)).isEmpty, "no face and no input for 60 s after a false alarm: no card")
     check(engine.record?.totals()[.away] == nil, "the quiet minute is focused")
+}
+
+/// Developer mode: the ticks kept for a false alarm cover the 3 minutes before its card and the card's whole time up.
+private func falseAlarmKeepsItsLeadUp() {
+    let engine = Engine()
+    _ = engine.start(session(), now: 0)
+    var recent = TickLog(), shownAt: Double?
+    for t in 0...400 {
+        let tk = tick(t, idle: t < 300 ? 0 : Double(t - 300), presence: t < 300 ? .face : .none)
+        if engine.step(tk).contains(.show(.away)) { shownAt = Double(t) }
+        recent.add(tk, shownAt: shownAt)
+    }
+    check(shownAt == 331, "away card 30 s after the last input")
+    check(recent.ticks.first?.now == 151 && recent.ticks.last?.now == 400 && recent.ticks.count == 250,
+          "the log runs from 3 minutes before the card to now, one tick a second")
+    recent.add(tick(401), shownAt: nil)
+    check(recent.ticks.first?.now == 221, "with no card up, only the last 3 minutes")
+    recent.clear()
+    check(recent.ticks.isEmpty, "cleared when developer mode is off")
 }
 
 private func distractionFalseAlarmRebooksTime() {
@@ -363,7 +434,12 @@ private func breakIsEarnedTakenAndOverrunIsAway() {
     _ = run(engine, 0...2999) { tick($0) }
     check(engine.breakAvailable, "50 focused minutes earn a break")
     check(engine.takeBreak(now: 3000) == [.dismiss, .save], "taking the break dismisses and saves")
-    let log = run(engine, 3000...3330) { tick($0, idle: $0 >= 3300 ? 999 : 0, presence: $0 >= 3300 ? .none : .face) }
+    var onDuringBreak = true
+    let log = run(engine, 3000...3330) { t in
+        if t == 3299 { onDuringBreak = engine.wantsCamera }
+        return tick(t, idle: t >= 3300 ? 999 : 0, presence: t >= 3300 ? .none : .face)
+    }
+    check(!onDuringBreak && engine.wantsCamera, "the camera rests during the break and is back once it ends")
     check(engine.record?.totals()[.onBreak] == 300, "break counts 300 s as onBreak")
     check(occurrences(log, of: .sound(.resume)) == [3300], "the break's end sounds")
     check(occurrences(log, of: .show(.away)) == [3330], "overrun past the break is away after 30 s without a face")

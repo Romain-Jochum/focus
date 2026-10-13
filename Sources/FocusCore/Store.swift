@@ -42,6 +42,21 @@ public struct Store: Sendable {
         } catch { log(journalURL, error) }
     }
 
+    /// Developer mode: `false-alarms/<date>-<time>-<reason>/` holding alarm.json and the given files (the card's images).
+    public func save(_ alarm: FalseAlarm, files: [String: Data]) {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd-HHmmss"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        let kind = alarm.reason.prefix { $0.isLetter }
+        let dir = falseAlarmsURL.appendingPathComponent("\(formatter.string(from: alarm.at))-\(kind)", isDirectory: true)
+        write(alarm, to: dir.appendingPathComponent("alarm.json"))
+        for (name, data) in files {
+            do { try data.write(to: dir.appendingPathComponent(name), options: .atomic) } catch { log(dir.appendingPathComponent(name), error) }
+        }
+    }
+
+    public var falseAlarmsURL: URL { root.appendingPathComponent("false-alarms", isDirectory: true) }
+
     public func journal(since: Date) -> [Entry] {
         guard let text = try? String(contentsOf: journalURL, encoding: .utf8) else { return [] }
         return text.split(separator: "\n")
