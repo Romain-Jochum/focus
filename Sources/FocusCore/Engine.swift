@@ -165,6 +165,7 @@ public final class Engine {
         let cameraLost = tick.camera.map { [Presence.none, .blocked, .unauthorized].contains($0.presence) } ?? false
         // Keyboard or mouse input counts as presence when the camera sees no face (talking, or prompting while recording) or is off.
         if tick.camera?.presence == .face || ((tick.camera.map { $0.presence == .none } ?? true) && tick.idle < Self.activeIdle) { lastFaceAt = tick.now }
+        let breakEnd = breakEndsAt
         if let end = breakEndsAt {
             if pausing {
                 pauseEmptySince = cameraLost ? pauseEmptySince ?? tick.now : nil
@@ -174,6 +175,7 @@ public final class Engine {
                 stopBreak()
                 lastFaceAt = min(end, tick.now)
                 out.append(.sound(.resume))
+                out.append(.save)
             }
         }
 
@@ -249,10 +251,16 @@ public final class Engine {
         if session.mode == .offline, tick.idle < Self.activeIdle { activity.append(tick.now) }
         activity.removeAll { $0 < tick.now - Self.offlineWindow }
 
-        // No ticks arrive while the Mac sleeps: the missed time counts as away.
+        // No ticks arrive while the Mac sleeps: the missed time counts as away (after any break that ended during the sleep).
         if gap > Self.maxStep {
-            record?.add(.away, seconds: gap - dt, at: tick.date.addingTimeInterval(-dt))
-            record?.elapsed += gap - dt
+            let sleepStart = tick.now - gap, sleepEnd = tick.now - dt
+            let onBreakSleep = breakEnd.map { max(min($0, sleepEnd) - sleepStart, 0) } ?? 0
+            let awaySleep = max(sleepEnd - sleepStart - onBreakSleep, 0)
+            if onBreakSleep > 0 { record?.add(.onBreak, seconds: onBreakSleep, at: tick.date.addingTimeInterval(-dt - awaySleep)) }
+            if awaySleep > 0 {
+                record?.add(.away, seconds: awaySleep, at: tick.date.addingTimeInterval(-dt))
+                record?.elapsed += awaySleep
+            }
         }
 
         let bucket: Bucket
@@ -263,7 +271,7 @@ public final class Engine {
         else if drifting != nil { bucket = .drifting }
         else { bucket = .focused }
         record?.add(bucket, target: bucket == .drifting ? drifting : nil, seconds: dt, at: tick.date)
-        record?.elapsed += dt
+        if !onBreak { record?.elapsed += dt }
         category = bucket
         let bucketTarget = bucket == .drifting ? drifting : nil
         if tick.asleep {

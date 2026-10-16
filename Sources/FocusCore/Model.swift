@@ -1,7 +1,7 @@
 import Foundation
 
 /// Where the session's work happens.
-public enum Mode: String, Codable, Sendable { case computer, offline }
+public enum Mode: String, Codable, Sendable { case computer, offline, both }
 
 /// Every second of a session lands in exactly one category.
 public enum Bucket: String, Codable, Sendable, CaseIterable {

@@ -83,18 +83,18 @@ For YouTube, also turn on "Allow JavaScript from Apple Events" once in Safari's 
 
 ## Using it
 
-- **Start a session:** a one-sentence task, a mode (On computer or Offline), a duration, and optionally what you will do if you drift.
+- **Start a session:** a one-sentence task, a mode (On computer, Offline or both), a duration, and optionally what you will do if you drift.
 - **Check-ins:**
   - **Distraction:** a distracting site or app for 20 s.
-  - **Phone:** a phone in the camera's view, or your iPhone reporting use for 15 s, with no keyboard or mouse input for 10 s; or, On computer, your head down for 45 s with no input (a microphone in use counts as input).
+  - **Phone:** a phone in the camera's view, or your iPhone reporting use for 15 s, with no keyboard or mouse input for 10 s; or, in On computer mode only, your head down for 45 s with no input (a microphone in use counts as input).
   - **Away:** no face and no keyboard or mouse input for 30 s, or 2 minutes while an app is using the microphone; a covered camera for 30 s (counted from your last input if you cover it while typing, since the camera rests then).
-  - **Idle:** On computer, your face in view and no input for 3 minutes (a microphone in use counts as input).
-  - **Offline mode:** using the computer during an Offline session.
+  - **Idle:** in On computer mode only, your face in view and no input for 3 minutes (a microphone in use counts as input).
+  - **Offline mode:** using the computer during an Offline-only session.
   - **No session:** working hours without a session running.
 - **Answering:** at least three words, then **I wasn't drifting** (a false alarm: the time counts as focused, the card does not count against a perfect session, and that check stays quiet for 10 minutes; a site or app is allowed for 10 minutes), **Take my break** when a break is earned, or **I drifted — back to it**.
 - **Away card:** after you are back, it waits for **I was here** (a false alarm) or **I was away**. Its alarm stops when you are back and sounds again after 30 seconds if it is still unanswered.
 - **Ignoring a check-in:** after 30 s it becomes a looping alarm (the volume goes up to at least 50% while it sounds, then back), and a distracting tab is closed.
-- **Breaks:** one 5-minute break is earned per 50 focused minutes. **Quick pause** is for a short trip away (up to 5 minutes, once per session, twice from 90 minutes) and keeps the earned break; it ends by itself when the camera sees you back after at least 20 s away. **I'm back** ends either early.
+- **Breaks:** one 5-minute break is earned per 50 focused minutes. **Quick pause** is for a short trip away (up to 5 minutes, once per session, twice from 90 minutes) and keeps the earned break; it ends by itself when the camera sees you back after at least 20 s away. Both pause the session timer while the break timer counts down. **I'm back** ends either early.
 - **The garden:** the Focus window shows it on the right, with the level, XP, streak and today's multiplier. After a session the new growth spreads in with a card showing the result, and butterflies and birds move over the island for 20 seconds when you open the window.
 - **Finishing:** a completed session posts a notification with its result and a sound.
 - **Ending early:** type `I am ending this session early`, then wait 10 s (the popover can be closed). While a session runs, Quit is refused.

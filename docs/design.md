@@ -14,7 +14,7 @@ Research backing every number below lives in `research/` (see `research/README.m
 
 ### Session
 
-- Start sheet: task (one sentence, required), mode **On computer** or **Offline**, duration 25 / 50 / 90 / custom minutes, optional "If I drift, I will…" line (implementation intention, shown on every check-in).
+- Start sheet: task (one sentence, required), mode **On computer**, **Offline** or both (both chips can be selected together for sessions that mix computer and paper work), duration 25 / 50 / 90 / custom minutes, optional "If I drift, I will…" line (implementation intention, shown on every check-in).
 - Dock icon and a Focus window (same content as the menu-bar popover), so it is always visible while open; closing the window keeps it running.
 - Menu bar item: state dot (green focused, amber drifting, red away/alarm, grey idle) plus remaining minutes. Popover shows task, big tabular countdown, state line, Break and End buttons.
 - Wrap-up notification 5 min before the end. At the end: the session's verdict and XP (see Progression) as a notification with its sound, then a one-line reflection prompt ("How did it go?"), stored with the session.
@@ -28,8 +28,8 @@ Research backing every number below lives in `research/` (see `research/README.m
 | YouTube | Domain youtube.com during work hours | Inject hide-CSS (home feed, related sidebar, Shorts, end screen, thumbnails grid). Home page, `/shorts` and other pages count as Distraction; `/watch`, `/results`, `/playlist`, `/embed` and youtu.be links are allowed |
 | Away | No face and no keyboard or mouse input for 30 s (120 s while the microphone is in use), or a covered (dark or uniform frame) or unauthorized camera for 30 s (the camera rests during unbroken input, so a lens covered then is seen once input stops, and Away comes 30 s after the last input) | Alarm card + chime (again at 20 s), then the looping alarm, which stops when you are back; time counted as `away`; the card waits for an answer (see Check-in) |
 | Phone | No keyboard/mouse input for 10 s and either a phone detected by the camera (confidence ≥ 0.5) in two consecutive runs of the phone model, or the iPhone on the desk reporting it is unlocked and in use for 15 s (its Bluetooth "Nearby Info" advert, see below); or (On computer mode only) face present, head pitched down more than 20° (default, calibrated with `--probe`) and no input for 45 s (a microphone in use counts as input) | Check-in, reason "Phone?"; time counted as `phone` |
-| Idle at computer | Mode On computer, face present, no input for 3 min (a microphone in use counts as input) | Soft check-in |
-| On computer while Offline | Mode Offline, keyboard/mouse active more than 60 s within the last 120 s | Check-in "Your task is offline — what's this?" |
+| Idle at computer | Mode On computer only, face present, no input for 3 min (a microphone in use counts as input) | Soft check-in |
+| On computer while Offline | Mode Offline only, keyboard/mouse active more than 60 s within the last 120 s | Check-in "Your task is offline — what's this?" |
 | No session | Work hours (default Mon–Fri 09:00–19:00), input active 3 min, no session | "Start a session or say why not" card; repeats every 15 min; answer logged |
 
 - Input counts as presence: keyboard or mouse input in the last 2 s keeps Away from firing while the camera sees no face or rests (see Camera cadence and budget). A covered or unauthorized camera is not excused by input.
@@ -55,10 +55,10 @@ Research backing every number below lives in `research/` (see `research/README.m
 
 ### Breaks
 
-- One 5-minute break earned per 50 minutes of focused time; at most one banked. No rules fire during a break except the timer and the permissions check, and the camera rests.
+- One 5-minute break earned per 50 minutes of focused time; at most one banked. During a break or quick pause, the session timer pauses while the break timer counts down, no rules fire except the break timer and the permissions check, and the camera rests (on a regular break).
 - **I'm back** ends a break early; the rest of it is forfeited.
-- **Quick pause** (a bathroom trip): any time during a session with no check-in up, once per session (twice when the session is 90 minutes or longer), without using the earned break. It lasts up to 5 minutes, counts as `break` time, and does not cost a perfect session. It ends with **I'm back**, or by itself when the camera sees a face again after 20 s or more without one during the pause (a blink of no face while still at the desk does not count).
-- When a break or pause ends by itself, a soft two-tone sound plays. If no face is seen within 30 s, the Away alarm starts; overrun time counts as `away`.
+- **Quick pause** (a bathroom trip): any time during a session with no check-in up, once per session (twice when the session is 90 minutes or longer), without using the earned break. It pauses the session timer for up to 5 minutes, counts as `break` time on the timeline, and does not cost a perfect session. It ends with **I'm back**, or by itself when the camera sees a face again after 20 s or more without one during the pause (a blink of no face while still at the desk does not count).
+- When a break or pause ends by itself, a soft two-tone sound plays and the session timer resumes. If no face is seen within 30 s, the Away alarm starts; overrun time counts as `away`.
 
 ### Stats
 

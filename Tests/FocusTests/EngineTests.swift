@@ -65,10 +65,12 @@ func engineTests() {
     idleIsSuppressedDuringSettling()
     offlineRuleFiresAfterSettling()
     noSessionNagOnlyInWorkHours()
+    bothModeWorksOnPaperAndComputer()
     breakIsEarnedTakenAndOverrunIsAway()
     breakEndsEarlyWhenBack()
     quickPauseEndsWhenTheFaceReturns()
     quickPauseOverrunIsAway()
+    breaksPauseTheSessionTimer()
     checkInsAreCounted()
     answerValidation()
     completionThenReflect()
@@ -480,6 +482,65 @@ private func quickPauseEndsWhenTheFaceReturns() {
     check(engine.record?.totals()[.onBreak] == 60, "the pause counts as break time")
     check(occurrences(log, of: .show(.away)).isEmpty, "no away card during the pause")
     check(engine.pause(now: 800).isEmpty, "no second pause in a 50-minute session")
+}
+
+private func bothModeWorksOnPaperAndComputer() {
+    let engine = Engine()
+    _ = engine.start(session(90, mode: .both), now: 0)
+    // Writing on paper (head down 35°, no keyboard/mouse input for 4 minutes) and then typing for 3 minutes: neither raises a check-in.
+    let paperAndTyping = run(engine, 0...420) { t in
+        tick(t, idle: t < 240 ? Double(t) : 0, pitch: t < 240 ? 35 : 5)
+    }
+    let cards = paperAndTyping.flatMap(\.actions).filter { if case .show = $0 { true } else { false } }
+    check(cards.isEmpty, "both mode allows looking down at paper with no input and typing on the computer without check-ins")
+    check(engine.record?.totals()[.focused] == 421, "both paper and computer work count as focused")
+
+    // Visual phone, BLE iPhone, distraction and away still fire in .both mode.
+    let phoneLog = run(engine, 421...431) { tick($0, idle: 15, phone: ($0 == 430 || $0 == 431) ? 0.9 : 0) }
+    check(occurrences(phoneLog, of: phoneShow) == [431], "a phone seen by the camera still raises a check-in in both mode")
+    _ = engine.answer(.drifted, text: "checked my phone", now: 432, date: workDate.addingTimeInterval(432))
+    let driftLog = run(engine, 433...500) { tick($0, app: safari, url: youtube) }
+    check(occurrences(driftLog, of: distraction) == [492], "distracting sites still raise a check-in in both mode")
+    _ = engine.answer(.drifted, text: "closed the tab", now: 493, date: workDate.addingTimeInterval(493))
+    let awayLog = run(engine, 494...530) { tick($0, idle: 999, presence: .none) }
+    check(occurrences(awayLog, of: .show(.away)) == [523], "walking away still raises the away card after 30 s in both mode")
+}
+
+private func breaksPauseTheSessionTimer() {
+    let engine = Engine()
+    _ = engine.start(session(60), now: 0)
+    _ = run(engine, 0...2999) { tick($0) }
+    check(engine.record?.elapsed == 3000 && engine.remaining == 600, "50 minutes elapsed, 10 minutes remaining before break")
+    check(engine.takeBreak(now: 3000) == [.dismiss, .save], "earned break starts at 3000 s")
+    // Run through the full 5-minute break (3000...3299); at t=3300 the break ends and t=3300 is the first focused second after the break.
+    let breakLog = run(engine, 3000...3299) { tick($0, idle: 999, presence: .none) }
+    check(engine.record?.elapsed == 3000 && engine.remaining == 600, "the session timer stays paused throughout the 5-minute break")
+    check(engine.record?.totals()[.onBreak] == 300, "the 5-minute break is still booked on the timeline as onBreak")
+    check(occurrences(breakLog, of: .ended(.completed)).isEmpty, "the session does not end early from break time")
+
+    // Take a 2-minute quick pause at 3300...3420; timer must also stay paused.
+    _ = engine.step(tick(3300))
+    check(engine.record?.elapsed == 3001 && engine.remaining == 599, "timer resumes once the break ends")
+    check(engine.pause(now: 3301) == [.save], "quick pause starts")
+    _ = run(engine, 3301...3420) { tick($0, idle: 999, presence: .none) }
+    check(engine.endBreak(now: 3420) == [.save], "quick pause ended with I'm back")
+    check(engine.record?.elapsed == 3001 && engine.remaining == 599, "the session timer stays paused throughout the quick pause")
+    check(engine.record?.totals()[.onBreak] == 420, "both the break and the quick pause are booked as onBreak")
+
+    // Sleeping during a break does not advance the session timer for the break portion, only for away time past the break's end.
+    let sleepBreak = Engine()
+    _ = sleepBreak.start(session(90), now: 0)
+    _ = run(sleepBreak, 0...2999) { tick($0) }
+    _ = sleepBreak.takeBreak(now: 3000)
+    _ = sleepBreak.step(tick(3000))
+    // Mac sleeps for 100 s during the 300 s break (still within the break: 3100 < 3300).
+    _ = sleepBreak.step(tick(3100))
+    check(sleepBreak.record?.elapsed == 3000 && sleepBreak.record?.totals()[.onBreak] == 101,
+          "sleeping within a break books onBreak and does not advance the session timer")
+    // Now sleep past the break end (from 3100 to 3400; break ends at 3300): 200 s of break + 95 s of away sleep + 5 s dt.
+    _ = sleepBreak.step(tick(3400))
+    check(sleepBreak.record?.totals()[.onBreak] == 301 && sleepBreak.record?.totals()[.away] == 95 && sleepBreak.record?.elapsed == 3100,
+          "sleeping past the end of a break pauses the timer until the break ends, then books the overrun as away")
 }
 
 private func quickPauseOverrunIsAway() {

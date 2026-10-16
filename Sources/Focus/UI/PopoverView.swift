@@ -43,16 +43,22 @@ struct StartForm: View {
             field("Task", "One sentence", $task)
             field("If I drift, I will…", "Optional", $plan)
             HStack(spacing: Metrics.row) {
-                Chip(text: "On computer", on: mode == .computer) { mode = .computer }
-                Chip(text: "Offline", on: mode == .offline) { mode = .offline }
+                Chip(text: "On computer", on: mode != .offline) {
+                    mode = switch mode { case .computer: .offline; case .offline: .both; case .both: .offline }
+                }
+                Chip(text: "Offline", on: mode != .computer) {
+                    mode = switch mode { case .offline: .computer; case .computer: .both; case .both: .computer }
+                }
             }
             Text("Duration").font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
             HStack(spacing: Metrics.row) {
                 ForEach([25, 50, 90], id: \.self) { preset in Chip(text: "\(preset)", on: minutes == preset) { minutes = preset } }
                 Stepper(value: $minutes, in: 5...240, step: 5) { Text("\(minutes) min").monospacedDigit() }.fixedSize()
             }
-            Button("Start") { model.start(task: task.trimmed, plan: plan.trimmed, mode: mode, minutes: minutes) }
-                .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction).disabled(task.trimmed.isEmpty).frame(maxWidth: .infinity)
+            Button { model.start(task: task.trimmed, plan: plan.trimmed, mode: mode, minutes: minutes) } label: {
+                Text("Start").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction).disabled(task.trimmed.isEmpty)
         }
     }
 

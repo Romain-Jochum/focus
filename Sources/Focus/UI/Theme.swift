@@ -91,7 +91,7 @@ struct Chip: View {
     let text: String, on: Bool
     let action: () -> Void
     var body: some View {
-        Button(action: action) { Text(text).monospacedDigit().frame(maxWidth: .infinity).padding(.vertical, 5) }
+        Button(action: action) { Text(text).monospacedDigit().frame(maxWidth: .infinity).padding(.vertical, 5).contentShape(Rectangle()) }
             .buttonStyle(.plain)
             .foregroundStyle(on ? Color.white : Color.primary)
             .background(on ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.quaternary), in: RoundedRectangle(cornerRadius: Metrics.control))
